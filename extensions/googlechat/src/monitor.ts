@@ -308,8 +308,8 @@ async function processMessageWithPipeline(params: {
     reply: {
       to: `googlechat:${spaceId}`,
       originatingTo: `googlechat:${spaceId}`,
-      replyToId: message.thread?.name,
-      replyToIdFull: message.thread?.name,
+      replyToId: isGroup ? message.thread?.name : undefined,
+      replyToIdFull: isGroup ? message.thread?.name : undefined,
     },
     message: {
       body,
