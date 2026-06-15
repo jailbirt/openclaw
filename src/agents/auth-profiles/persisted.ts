@@ -20,7 +20,7 @@ import {
   normalizeAuthEmailToken,
   normalizeAuthIdentityToken,
 } from "./oauth-shared.js";
-import { resolveLegacyAuthStorePath } from "./paths.js";
+import { resolveAuthStorePath, resolveLegacyAuthStorePath } from "./paths.js";
 import { readPersistedAuthProfileStoreRaw } from "./sqlite.js";
 import {
   coerceAuthProfileState,
@@ -791,6 +791,35 @@ export function mergeOAuthFileIntoStore(store: AuthProfileStore): boolean {
       provider,
       ...creds,
     };
+    mutated = true;
+  }
+  return mutated;
+}
+
+/**
+ * Imports a legacy per-agent auth-profiles.json store into missing profiles.
+ *
+ * The runtime store moved to SQLite, but installs upgraded from versions that
+ * persisted credentials in auth-profiles.json only run the JSON->SQLite import
+ * via `openclaw doctor --fix`. Without this lazy merge the upgraded SQLite store
+ * starts empty, so every provider that references an auth profile fails with
+ * "401 invalid api key" until the operator re-runs doctor. Mirrors
+ * `mergeOAuthFileIntoStore`, which already back-fills the legacy oauth.json.
+ */
+export function mergeLegacyJsonProfilesIntoStore(
+  store: AuthProfileStore,
+  agentDir?: string,
+): boolean {
+  const legacyStore = coercePersistedAuthProfileStore(loadJsonFile(resolveAuthStorePath(agentDir)));
+  if (!legacyStore) {
+    return false;
+  }
+  let mutated = false;
+  for (const [profileId, credential] of Object.entries(legacyStore.profiles)) {
+    if (store.profiles[profileId]) {
+      continue;
+    }
+    store.profiles[profileId] = credential;
     mutated = true;
   }
   return mutated;

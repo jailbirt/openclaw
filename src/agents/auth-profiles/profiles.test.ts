@@ -12,6 +12,7 @@ import { closeOpenClawAgentDatabasesForTest } from "../../state/openclaw-agent-d
 import { closeOpenClawStateDatabaseForTest } from "../../state/openclaw-state-db.js";
 import { withEnvAsync } from "../../test-utils/env.js";
 import { AUTH_STORE_VERSION } from "./constants.js";
+import { resolveAuthStorePath } from "./paths.js";
 import { loadPersistedAuthProfileStore } from "./persisted.js";
 import {
   clearLastGoodProfileWithLock,
@@ -97,6 +98,52 @@ function expectOAuthCredentialFields(
   }
   return credential;
 }
+
+describe("legacy auth-profiles.json lazy migration", () => {
+  it("loads and persists legacy JSON profiles when the SQLite store is empty", async () => {
+    await withAuthProfileTestState(
+      "openclaw-auth-profile-legacy-json-",
+      async ({ agentDir }) => {
+        fs.mkdirSync(agentDir, { recursive: true });
+        // Simulate an install upgraded from a version that only persisted
+        // credentials in auth-profiles.json (SQLite store still empty).
+        fs.writeFileSync(
+          resolveAuthStorePath(agentDir),
+          JSON.stringify({
+            version: 1,
+            profiles: {
+              "litellm:manual": {
+                type: "api_key",
+                provider: "litellm",
+                key: "legacy-secret-key",
+              },
+            },
+          }),
+        );
+
+        // Empty SQLite store before load.
+        expect(loadPersistedAuthProfileStore(agentDir)).toBeNull();
+
+        // Runtime load should surface the legacy profile...
+        const runtime = loadAuthProfileStoreForRuntime(agentDir);
+        expect(runtime.profiles["litellm:manual"]).toMatchObject({
+          type: "api_key",
+          provider: "litellm",
+          key: "legacy-secret-key",
+        });
+
+        // ...and persist it to SQLite so it survives without the JSON file.
+        const persisted = loadPersistedAuthProfileStore(agentDir);
+        expect(persisted?.profiles["litellm:manual"]).toMatchObject({
+          type: "api_key",
+          provider: "litellm",
+          key: "legacy-secret-key",
+        });
+      },
+      { clearOAuthDir: true },
+    );
+  });
+});
 
 describe("promoteAuthProfileInOrder", () => {
   it("marks newly saved runtime snapshot profiles as persisted", async () => {
