@@ -21,7 +21,7 @@ describe("agentLoop turn handoff", () => {
     { name: "any other abort cancels", reason: new Error("user aborted"), delivered: [] },
   ])("$name the calls dispatched beside it", async ({ reason, delivered }) => {
     const controller = new AbortController();
-    const handedOff = createDeferred<void>();
+    const handedOff = createDeferred();
     const sideEffects: string[] = [];
     const sibling = (name: string, gate?: Promise<void>): AgentTool => ({
       ...makeTool(name),
